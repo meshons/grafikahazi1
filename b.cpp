@@ -256,8 +256,8 @@ class Ember {
     Fej fej;
     float state = 0;
     float irany = -1;
-    float labszarhossz = 0.10f;
-    float combhossz = 0.12f;
+    float labszarhossz = 0.12f;
+    float combhossz = 0.10f;
 public:
     Ember(): position(0,0), kerek(position, 0.10f), fej(position+vec2(0, 0.345f), 0.045f) {}
 
@@ -313,7 +313,7 @@ public:
                 (testPontok[1].y - testPontok[6].y) * (testPontok[1].y - testPontok[6].y)
         );
         float valami = (labszarfenektav1*labszarfenektav1 + combhossz*combhossz - labszarhossz*labszarhossz)/
-                       (2*labszarfenektav1*combhossz);
+                            (2*labszarfenektav1*combhossz);
         float szog1 = acosf(valami);
         float valami2 = (labszarfenektav2*labszarfenektav2 + combhossz*combhossz - labszarhossz*labszarhossz)/
                 (2*labszarfenektav2*combhossz);
@@ -339,6 +339,21 @@ public:
 
 };
 
+class Curve {
+    GLuint vao, vbo;
+public:
+    Curve () {}
+
+    void Create() {
+
+    }
+
+    void Draw() {
+
+    }
+
+};
+
 Ember ember;
 
 // Initialization, create an OpenGL context
@@ -353,7 +368,7 @@ void onInitialization() {
 
 // Window has become invalid: Redraw
 void onDisplay() {
-    glClearColor(1, 1, 1, 1);     // background color
+    glClearColor(0.529, 0.808, 0.98, 1);     // background color
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear frame buffer
 
     float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix,

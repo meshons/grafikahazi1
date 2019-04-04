@@ -1,0 +1,4 @@
+https://en.cppreference.com/w/cpp/header/cstdlib
+https://en.cppreference.com/w/cpp/header/cstdio
+https://en.cppreference.com/w/cpp/header/cmath
+https://en.cppreference.com/w/cpp/header/vector

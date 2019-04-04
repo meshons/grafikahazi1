@@ -59,8 +59,69 @@ const char * const fragmentSource = R"(
 	}
 )";
 
+// 2D camera
+// http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/grafikus%20alap%20hw/sw/smoothtriangle.cpp
+class Camera2D {
+    vec2 wCenter; // center in world coordinates
+    vec2 wSize;   // width and height in world coordinates
+public:
+    Camera2D() : wCenter(0, 0), wSize(20, 20) { }
+
+    mat4 V() { return TranslateMatrix(-wCenter); }
+    mat4 P() { return ScaleMatrix(vec2(2 / wSize.x, 2 / wSize.y)); }
+
+    mat4 Vinv() { return TranslateMatrix(wCenter); }
+    mat4 Pinv() { return ScaleMatrix(vec2(wSize.x / 2, wSize.y / 2)); }
+
+    void Zoom(float s) { wSize = wSize * s; }
+    void Pan(vec2 t) { wCenter = wCenter + t; }
+};
+
+Camera2D camera;		// 2D camera
+
 GPUProgram gpuProgram; // vertex and fragment shaders
 unsigned int vao;	   // virtual world on the GPU
+float tCurrent = 0;
+
+// felhasználom alapnak: http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bezier.cpp
+// http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bmemodel.pdf 11,16-18
+class KochanekBartelsSpline
+{
+    unsigned int vaoCurve{}, vboCurve{};
+    unsigned int vaoCtrlPoints{}, vboCtrlPoints{};
+protected:
+    std::vector<vec4> wCtrlPoints;
+    std::vector<float> ts;
+public:
+    KochanekBartelsSpline() {
+        glGenVertexArrays(1, &vaoCurve);
+        glBindVertexArray(vaoCurve);
+
+        glGenBuffers(1, &vboCurve); // Generate 1 vertex buffer object
+        glBindBuffer(GL_ARRAY_BUFFER, vboCurve);
+
+        // Enable the vertex attribute arrays
+        glEnableVertexAttribArray(0);  // attribute array 0
+        // Map attribute array 0 to the vertex data of the interleaved vbo
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), NULL); // attribute array, components/attribute, component type, normalize?, stride, offset
+
+        glGenVertexArrays(1, &vaoCtrlPoints);
+        glBindVertexArray(vaoCtrlPoints);
+
+        glGenBuffers(1, &vboCtrlPoints); // Generate 1 vertex buffer object
+        glBindBuffer(GL_ARRAY_BUFFER, vboCtrlPoints);
+
+        // Enable the vertex attribute arrays
+        glEnableVertexAttribArray(0);  // attribute array 0
+        // Map attribute array 0 to the vertex data of the interleaved vbo
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), NULL); // attribute array, components/attribute, component type, normalize?, stride, offset
+    }
+
+    void AddControlPoint(vec2 c, float t) {
+        vec4 wVertex = vec4(c.x, c.y, 0, 1) * camera.Pinv() * camera.Vinv();
+        wCtrlPoints.push_back(wVertex);
+    }
+};
 
 // Initialization, create an OpenGL context
 void onInitialization() {
@@ -85,7 +146,7 @@ void onInitialization() {
 		0, NULL); 		     // stride, offset: tightly packed
 
 	// create program for the GPU
-	gpuProgram.Create(vertexSource, fragmentSource, "outColor");
+	gpuProgram.Create(vertexSource, fragmentSource, "outColor2");
 }
 
 // Window has become invalid: Redraw
@@ -106,7 +167,7 @@ void onDisplay() {
 	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
 
 	glBindVertexArray(vao);  // Draw call
-	glDrawArrays(GL_TRIANGLES, 0 /*startIdx*/, 3 /*# Elements*/);
+	glDrawArrays(GL_LINE_STRIP, 0 /*startIdx*/, 3 /*# Elements*/);
 
 	glutSwapBuffers(); // exchange buffers for double buffering
 }
@@ -151,3 +212,57 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 }
+
+// forras: http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bmemodel.pdf
+// 17. oldal
+class CatmullRom {
+    std::vector<vec2> cps; // control points
+    std::vector<float> ts; // parameter values
+
+    vec2 Hermite(vec2 p0, vec2 v0, float t0,
+                 vec2 p1, vec2 v1, float t1,
+            float t) {
+        vec2 a0 = p0;
+        vec2 a1 = v1;
+        vec2 a2 = ((p1 - p0) * (1 / ((t1-t0) * (t1-t0)) * 3.0f)) - ((v1 + v0 * 2.0f) * (1 / (t1 - t0)));
+        vec2 a3 = ((p0 - p1) * (1 / ((t1-t0) * (t1-t0) * (t1-t0)) * 2.0f)) + ((v1 + v0) * (1 / ((t1 - t0) * (t1 - t0))));
+        return vec2(a3 * (t - t0) * (t - t0) * (t - t0) + a2 * (t - t0) * (t - t0) + a1 * (t - t0) + a0);
+    }
+
+    vec2 v(vec2 p0, float t0, vec2 p1, float t1, vec2 p2, float t2){
+        return vec2(((p2 - p1) * (1 / (t2 - t1) )) + ((p1 - p0) * (1 / (t1 - t0) )));
+    }
+public:
+    void AddControlPoint(vec2 cp, float t) {
+        cps.push_back(cp);
+        ts.push_back(t);
+    }
+
+    vec2 r(float t) {
+        // TODO komment
+        for (int i = 0; i < cps.size(); ++i){
+            if (ts[i] <= t && t <= ts[i+1]){
+                vec2 v0, v1 = v(
+                        cps[i-1],
+                        ts[i-1],
+                        cps[i],
+                        ts[i],
+                        cps[i+1],
+                        ts[i+1]
+                        );
+                if(i > 0){
+                    v0 = v(cps[i-1],
+                           ts[i-1],
+                           cps[i],
+                           ts[i],
+                           cps[i+1],
+                           ts[i+1]);
+                } else {
+                    v0 = cps[i];
+                }
+                return Hermite(cps[i], v0, ts[i], cps[i+1], v1, ts[i+1], t);
+            }
+        }
+    }
+
+};
