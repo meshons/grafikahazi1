@@ -88,6 +88,137 @@ public:
 Camera camera;
 GPUProgram gpuProgram; // vertex and fragment shaders
 
+//http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bmemodel.pdf 18. oldal
+class Spline {
+    GLuint vao, vbo[2];
+    vec2 pontok[2000];
+    vec3 szinek[2000];
+    std::vector<vec2> cps;
+    bool modosult = false;
+
+    vec2 v(vec2 p1, vec2 p2, vec2 p3) {
+        float tenzio = -0.5f;
+        return (((p3-p2)*(1/(p3.x-p2.x))+((p2-p1)*(1/(p2.x-p1.x))))*0.5f*(1-tenzio));
+    }
+
+    vec2 point(vec2 p1, vec2 p2, vec2 p3, vec2 p4, float t) {
+        vec2 v2=v(p1, p2, p3);
+        vec2 v3=v(p2, p3, p4);
+
+        vec2 a0 = p2;
+        vec2 a1 = v2;
+        vec2 a2 = (((p3-p2)*3.0f)*(1/((p3.x-p2.x)*((p3.x-p2.x))))) - ((v3+v2*2.0f)*(1/(p3.x-p2.x)));
+        vec2 a3 = (((p2-p3)*2.0f)*(1/((p3.x-p2.x)*(p3.x-p2.x)*(p3.x-p2.x)))) + ((v3+v2)*(1/((p3.x-p2.x)*(p3.x-p2.x))));
+
+        float t0 = t-p2.x;
+        float t1 = t0*t0;
+        float t2 = t1*t0;
+
+        return a3*t2 + a2*t1 + a1*t0 + a0;
+    }
+    vec2 derivaltpoint(vec2 p1, vec2 p2, vec2 p3, vec2 p4, float t) {
+        vec2 v2=v(p1, p2, p3);
+        vec2 v3=v(p2, p3, p4);
+
+        vec2 a1 = v2;
+        vec2 a2 = (((p3-p2)*3.0f)*(1/((p3.x-p2.x)*((p3.x-p2.x))))) - ((v3+v2*2.0f)*(1/(p3.x-p2.x)));
+        vec2 a3 = (((p2-p3)*2.0f)*(1/((p3.x-p2.x)*(p3.x-p2.x)*(p3.x-p2.x)))) + ((v3+v2)*(1/((p3.x-p2.x)*(p3.x-p2.x))));
+
+        float t0 = t-p2.x;
+        float t1 = t0*t0;
+        float t2 = t1*t0;
+
+        return a3*t1*3.0f + a2*t0*2.0f +a1;
+    }
+public:
+    Spline () {
+        cps.emplace_back(vec2(-2.0f,-0.8f));
+        cps.emplace_back(vec2(2.0f,-0.8f));
+    }
+
+    vec2 r(float t) {
+        for (int i = 0; i < cps.size() - 1; ++i){
+            if(cps[i].x <= t && cps[i+1].x >= t){
+                vec2 p1 = cps.front()-vec2(0.5f,0.0f);
+                if(i>0)p1=cps[i-1];
+                vec2 p2 = cps[i];
+                vec2 p3 = cps[i+1];
+                vec2 p4 = cps.back()+vec2(0.5f,0.0f);
+                if(i+2 < cps.size()) p4 = cps[i+2];
+                return point(p1, p2, p3, p4, t);
+            }
+        }
+    }
+
+    vec2 derivalt(float t) {
+        for (int i = 0; i < cps.size() - 1; ++i){
+            if(cps[i].x <= t && cps[i+1].x >= t){
+                vec2 p1 = cps.front()-vec2(5.0f,0.0f);
+                if(i>0)p1=cps[i-1];
+                vec2 p2 = cps[i];
+                vec2 p3 = cps[i+1];
+                vec2 p4 = cps.back()+vec2(5.0f,0.0f);
+                if(i+2 < cps.size()) p4 = cps[i+2];
+                return derivaltpoint(p1, p2, p3, p4, t);
+            }
+        }
+    }
+
+    void Create() {
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+        glGenBuffers(2, &vbo[0]);
+
+        for(int i=0;i<2000;++i)
+            pontok[i] = vec2(float(i-1000)/500.f,-0.8f);
+
+        szinek[0] = {0,0,0};
+        for(auto & szin : szinek)
+            szin = szinek[0];
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(pontok), pontok, GL_DYNAMIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(szinek), szinek, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+    }
+
+    void Draw() {
+        glBindVertexArray(vao);
+        if(modosult){
+            //TODO csak a kamera
+            for(int i=0;i<2000;++i)
+                pontok[i] = r(float(i-1000)/500.f);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pontok), pontok);
+            modosult=false;
+        }
+
+        glDrawArrays(GL_LINE_STRIP, 0, 2000);
+    }
+
+    void addPoint(vec2 p) {
+        for (auto & cp: cps)
+            if (p.x == cp.x)
+                return;
+        modosult = true;
+        for (auto it = cps.begin(); it != cps.end(); ++it){
+            if(p.x < it->x){
+                cps.insert(it, p);
+                return;
+            }
+        }
+        cps.push_back(p);
+    }
+};
+Spline spline;
+
 class Kerek {
     GLuint vao;
     GLuint vbo[2];
@@ -181,12 +312,12 @@ public:
         irany = ujirany;
     }
 
-    void mozgat(vec2 hova){
-        center = center + hova;
+    void mozgat(vec2 eltolas){
+        center = center + eltolas;
         for (auto & pont : alapPontok)
-            pont = pont + hova;
-        for (auto & pont : kullopontok)
-            pont = pont + hova;
+            pont = pont + eltolas;
+        for (auto & pont : alapKullopontok)
+            pont = pont + eltolas;
     }
 };
 
@@ -217,7 +348,7 @@ public:
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-        szin = {0, 1, 0};
+        szin = {1, 0, 1};
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
         glBufferData(GL_ARRAY_BUFFER, sizeof(szin)*40, nullptr, GL_STATIC_DRAW);
@@ -233,15 +364,18 @@ public:
         glBindVertexArray(vao);
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pontok), pontok);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
 
         glLineWidth(2.0f);
         glDrawArrays(GL_LINE_LOOP, 0, 40);
     }
 
-    void mozgat(vec2 hova){
-        center = center + hova;
+    void mozgat(vec2 eltolas){
+        center = center + eltolas;
         for (auto & pont : pontok)
-            pont = pont + hova;
+            pont = pont + eltolas;
     }
 };
 
@@ -249,6 +383,7 @@ class Ember {
     GLuint vao;
     GLuint vbo[2];
     vec2 position; // kerék középpontja
+    float posOnSpline = 0.0f;
     vec2 testPontok[7];
     vec2 labfejPontok[2];
     vec3 testSzinek[7];
@@ -259,7 +394,7 @@ class Ember {
     float labszarhossz = 0.12f;
     float combhossz = 0.10f;
 public:
-    Ember(): position(0,0), kerek(position, 0.10f), fej(position+vec2(0, 0.345f), 0.045f) {}
+    Ember(): position(0,0), kerek(position, 0.1f), fej(position+vec2(0, 0.345f), 0.045f) {}
 
     void Create() {
         glGenVertexArrays(1, &vao);
@@ -295,10 +430,22 @@ public:
     void Animate(long time) {
         state = float(time % 10000) / 10000.f;
         kerek.allapot(state);
+        posOnSpline=(state-0.5f)*2.0f;
     }
 
     void Draw() {
         glBindVertexArray(vao);
+
+        vec2 regiposition = position;
+
+        vec2 deri = normalize(spline.derivalt(posOnSpline));
+        vec2 normal = vec2(deri.y*-1.f, deri.x) * 0.1f;
+        position = normal + spline.r(posOnSpline);
+        vec2 poseltolas = position - regiposition;
+        for( auto & p : testPontok) p = p + poseltolas;
+        for( auto & p : labfejPontok) p = p + poseltolas;
+        kerek.mozgat(poseltolas);
+        fej.mozgat(poseltolas);
 
         testPontok[3] = forgatas(labfejPontok[0], irany*state*M_PI*2, position);
         testPontok[6] = forgatas(labfejPontok[1], irany*state*M_PI*2, position);
@@ -339,21 +486,6 @@ public:
 
 };
 
-class Curve {
-    GLuint vao, vbo;
-public:
-    Curve () {}
-
-    void Create() {
-
-    }
-
-    void Draw() {
-
-    }
-
-};
-
 Ember ember;
 
 // Initialization, create an OpenGL context
@@ -361,6 +493,7 @@ void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
 
     ember.Create();
+    spline.Create();
 
     // create program for the GPU
     gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
@@ -380,6 +513,7 @@ void onDisplay() {
     glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
 
     ember.Draw();
+    spline.Draw();
 
     glutSwapBuffers(); // exchange buffers for double buffering
 }
@@ -407,16 +541,11 @@ void onMouse(int button, int state, int pX, int pY) { // pX, pY are the pixel co
     float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
     float cY = 1.0f - 2.0f * pY / windowHeight;
 
-    char * buttonStat;
-    switch (state) {
-        case GLUT_DOWN: buttonStat = "pressed"; break;
-        case GLUT_UP:   buttonStat = "released"; break;
-    }
-
     switch (button) {
-        case GLUT_LEFT_BUTTON:   printf("Left button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);   break;
-        case GLUT_MIDDLE_BUTTON: printf("Middle button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY); break;
-        case GLUT_RIGHT_BUTTON:  printf("Right button %s at (%3.2f, %3.2f)\n", buttonStat, cX, cY);  break;
+        case GLUT_LEFT_BUTTON:
+            if (state == GLUT_DOWN)
+                spline.addPoint({cX, cY});
+            break;
     }
 }
 
