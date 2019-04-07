@@ -41,11 +41,14 @@ const char *const vertexSource = R"(
 	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
 	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
 	layout(location = 1) in vec3 vertexColor;	    // Attrib Array 1
+    layout(location = 2) in vec2 vertexUV;
 
     out vec3 color;
+    out vec2 texcoord;
 
 	void main() {
         color = vertexColor;
+        texcoord = vertexUV;
 		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
 	}
 )";
@@ -55,11 +58,17 @@ const char *const fragmentSource = R"(
 	#version 330			// Shader 3.3
 	precision highp float;	// normal floats, makes no difference on desktop computers
 
+	uniform sampler2D textureUnit;
+    uniform int isTexture;
+
 	in vec3 color;		// uniform variable, the color of the primitive
+    in vec2 texcoord;
+
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
 	void main() {
-		fragmentColor = vec4(color, 1); // extend RGB to RGBA
+		 if(isTexture==0) fragmentColor = vec4(color, 1); // extend RGB to RGBA
+         else fragmentColor = texture(textureUnit, texcoord);
 	}
 )";
 
@@ -158,8 +167,8 @@ public:
 Camera camera;
 GPUProgram gpuProgram; // vertex and fragment shaders
 
-//http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bmemodel.pdf 18. oldal
-class Spline {
+class SplineBase{
+protected:
     GLuint vao, vbo[2];
     vec2 pontok[4500];
     vec3 szinek[4500];
@@ -205,13 +214,7 @@ class Spline {
 
         return a3 * t1 * 3.0f + a2 * t0 * 2.0f + a1;
     }
-
 public:
-    Spline() {
-        cps.emplace_back(vec2(-2.3f, -0.8f));
-        cps.emplace_back(vec2(2.3f, -0.8f));
-    }
-
     vec2 r(float t) {
         for (int i = 0; i < cps.size() - 1; ++i) {
             if (cps[i].x <= t && cps[i + 1].x >= t) {
@@ -238,6 +241,30 @@ public:
                 return derivaltpoint(p1, p2, p3, p4, t);
             }
         }
+    }
+
+    void addPoint(vec2 p) {
+        p=p-camera.eltolas();
+        for (auto &cp: cps)
+            if (p.x == cp.x)
+                return;
+        modosult = true;
+        for (auto it = cps.begin(); it != cps.end(); ++it) {
+            if (p.x < it->x) {
+                cps.insert(it, p);
+                return;
+            }
+        }
+        cps.push_back(p);
+    }
+};
+
+//http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/geometriai%20modellez%C3%A9s/bmemodel.pdf 18. oldal
+class Spline : public SplineBase {
+public:
+    Spline() {
+        cps.emplace_back(vec2(-2.3f, -0.8f));
+        cps.emplace_back(vec2(2.3f, -0.8f));
     }
 
     void Create() {
@@ -282,21 +309,6 @@ public:
         }
 
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4500);
-    }
-
-    void addPoint(vec2 p) {
-        p=p-camera.eltolas();
-        for (auto &cp: cps)
-            if (p.x == cp.x)
-                return;
-        modosult = true;
-        for (auto it = cps.begin(); it != cps.end(); ++it) {
-            if (p.x < it->x) {
-                cps.insert(it, p);
-                return;
-            }
-        }
-        cps.push_back(p);
     }
 };
 
@@ -566,12 +578,111 @@ void Ember::Draw() {
     fej.Draw();
 }
 
+// http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/grafikus%20alap%20hw/sw/bme2dsys.pdf
+// textúrás rész
+class Hatter: public SplineBase {
+    vec4 image[500*500];
+    GLuint vao, vbo[2], textureId;
+    vec2 coord[4], uv[4];
+    vec4 egAlja, egTeteje;
+    vec4 hegyAlja, hegyTeteje;
+
+    vec4 atmenet(vec4 kezdet, vec4 vege, float szazalek) {
+        vec4 szin = {0,0,0,1};
+        szin.x = kezdet.x + (vege.x-kezdet.x)*szazalek;
+        szin.y = kezdet.y + (vege.y-kezdet.y)*szazalek;
+        szin.z = kezdet.z + (vege.z-kezdet.z)*szazalek;
+        return szin;
+    }
+public:
+    Hatter() {
+        cps.emplace_back(vec2(-2.3f, -0.8f));
+        cps.emplace_back(vec2(-0.73f, 0.58f));
+        cps.emplace_back(vec2(-0.03f, -0.47f));
+        cps.emplace_back(vec2(0.7f, 0.7f));
+        cps.emplace_back(vec2(2.3f, -0.8f));
+
+        coord[0] = {1,1};
+        coord[1] = {-1,1};
+        coord[2] = {1,-1};
+        coord[3] = {-1,-1};
+
+        uv[0] = {0,0};
+        uv[1] = {1,0};
+        uv[2] = {0,1};
+        uv[3] = {1,1};
+
+        egAlja = {143.0f/256, 188.0f/256, 216.0f/256, 1};
+        egTeteje = {2.0f/256,87.0f/256,140.0f/256, 1};
+
+        hegyAlja = { 140.0f/256, 93.0f/256, 52.0f/256, 1};
+        hegyTeteje = {174.0f/256, 131.0f/256, 98.0f/256, 1};
+
+        for(int y=0; y<500; ++y)
+            for(int x=0; x<500; ++x)
+            {
+                if(r((x-250)/250.0f).y-0.005f < -1*(y-250)/250.0f && r((x-250)/250.0f).y > -1*(y-250)/250.0f)
+                    image[500*y+x] = {0,0,0,1};
+                else if(r((x-250)/250.0f).y-0.005f > -1*(y-250)/250.0f)
+                    image[500*y+x] = atmenet(hegyAlja, hegyTeteje, -1*((-1*(y-250)/250.0f))/((r((x-250)/250.0f).y)-1.0f));
+                else
+                    image[500*y+x] = atmenet(egAlja, egTeteje, -1*(y-250)/250.0f);
+            }
+
+    }
+
+    void Create() {
+        glGenTextures(1, &textureId);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 500, 500, 0, GL_RGBA, GL_FLOAT, image);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+        glGenBuffers(2, &vbo[0]);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(coord), coord, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo[1]);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(uv), uv, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+    }
+
+    void Draw(){
+        int location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
+        glUniform1i(location, 1);
+        location = glGetUniformLocation(gpuProgram.getId(), "textureUnit");
+        glUniform1i(location, 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
+        glUniform1i(location, 0);
+    }
+};
+
+Hatter hatter;
+
 // Initialization, create an OpenGL context
 void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
 
+    int location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
+    glUniform1i(location, 0);
+
     ember.Create();
     spline.Create();
+    hatter.Create();
 
     // create program for the GPU
     gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
@@ -591,8 +702,9 @@ void onDisplay() {
     glUniformMatrix4fv(location, 1, GL_TRUE,
                        &MVPtransf[0][0]);    // Load a 4x4 row-major float matrix to the specified location
 
-    ember.Draw();
+    hatter.Draw();
     spline.Draw();
+    ember.Draw();
 
     glutSwapBuffers(); // exchange buffers for double buffering
 }
