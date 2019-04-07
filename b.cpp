@@ -33,14 +33,13 @@
 //=============================================================================================
 #include "framework.h"
 
-// vertex shader in GLSL: It is a Raw string (C++11) since it contains new line characters
 const char *const vertexSource = R"(
-	#version 330				// Shader 3.3
-	precision highp float;		// normal floats, makes no difference on desktop computers
+	#version 330
+	precision highp float;
 
-	uniform mat4 MVP;			// uniform variable, the Model-View-Projection transformation matrix
-	layout(location = 0) in vec2 vp;	// Varying input: vp = vertex position is expected in attrib array 0
-	layout(location = 1) in vec3 vertexColor;	    // Attrib Array 1
+	uniform mat4 MVP;
+	layout(location = 0) in vec2 vp;
+	layout(location = 1) in vec3 vertexColor;
     layout(location = 2) in vec2 vertexUV;
 
     out vec3 color;
@@ -49,25 +48,24 @@ const char *const vertexSource = R"(
 	void main() {
         color = vertexColor;
         texcoord = vertexUV;
-		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;		// transform vp from modeling space to normalized device space
+		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;
 	}
 )";
 
-// fragment shader in GLSL
 const char *const fragmentSource = R"(
-	#version 330			// Shader 3.3
-	precision highp float;	// normal floats, makes no difference on desktop computers
+	#version 330
+	precision highp float;
 
 	uniform sampler2D textureUnit;
     uniform int isTexture;
 
-	in vec3 color;		// uniform variable, the color of the primitive
+	in vec3 color;
     in vec2 texcoord;
 
-	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
+	out vec4 fragmentColor;
 
 	void main() {
-		 if(isTexture==0) fragmentColor = vec4(color, 1); // extend RGB to RGBA
+		 if(isTexture==0) fragmentColor = vec4(color, 1);
          else fragmentColor = texture(textureUnit, texcoord);
 	}
 )";
@@ -90,8 +88,11 @@ public:
     Kerek(vec2 center, float R) : center(center), R(R), state(0) {}
 
     void Create();
+
     void Draw();
+
     void allapot(float allapot);
+
     void mozgat(vec2 eltolas);
 };
 
@@ -106,14 +107,16 @@ public:
     Fej(vec2 center, float R) : center(center), R(R) {}
 
     void Create();
+
     void Draw();
+
     void mozgat(vec2 eltolas);
 };
 
 class Ember {
     GLuint vao;
     GLuint vbo[2];
-    vec2 position; // kerék középpontja
+    vec2 position;
     float posOnSpline = -1.0f;
     vec2 testPontok[7];
     vec2 labfejPontok[2];
@@ -128,8 +131,11 @@ public:
     Ember() : position(0, 0), kerek(position, 0.1f), fej(position + vec2(0, 0.345f), 0.045f) {}
 
     void Create();
+
     void Animate();
+
     void Draw();
+
     vec2 center() {
         return position + vec2(0, 0.1f);
     }
@@ -160,14 +166,14 @@ public:
     }
 
     vec2 eltolas() {
-        return center*-1;
+        return center * -1;
     }
 };
 
 Camera camera;
-GPUProgram gpuProgram; // vertex and fragment shaders
+GPUProgram gpuProgram;
 
-class SplineBase{
+class SplineBase {
 protected:
     GLuint vao, vbo[2];
     vec2 pontok[4500];
@@ -214,6 +220,7 @@ protected:
 
         return a3 * t1 * 3.0f + a2 * t0 * 2.0f + a1;
     }
+
 public:
     vec2 r(float t) {
         for (int i = 0; i < cps.size() - 1; ++i) {
@@ -244,7 +251,7 @@ public:
     }
 
     void addPoint(vec2 p) {
-        p=p-camera.eltolas();
+        p = p - camera.eltolas();
         for (auto &cp: cps)
             if (p.x == cp.x)
                 return;
@@ -272,16 +279,16 @@ public:
         glBindVertexArray(vao);
         glGenBuffers(2, &vbo[0]);
 
-        for (int i = 0; i < 4500; i+=2){
+        for (int i = 0; i < 4500; i += 2) {
             pontok[i] = vec2(float(i - 2250) / 1000.f, -0.8f);
-            pontok[i+1] = vec2(float(i - 2250) / 1000.f, -1.0f);
+            pontok[i + 1] = vec2(float(i - 2250) / 1000.f, -1.0f);
         }
 
         szinek[0] = {0, 0.7, 0};
         szinek[1] = {0, 0.3, 0};
         int i = 0;
         for (auto &szin : szinek)
-            szin = szinek[i++%2];
+            szin = szinek[i++ % 2];
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
         glBufferData(GL_ARRAY_BUFFER, sizeof(pontok), pontok, GL_DYNAMIC_DRAW);
@@ -299,9 +306,9 @@ public:
     void Draw() {
         glBindVertexArray(vao);
         if (modosult || kovetes) {
-            for (int i = 0; i < 4500; i+=2){
+            for (int i = 0; i < 4500; i += 2) {
                 pontok[i] = r(float(i - 2250) / 1000.f) + camera.eltolas();
-                pontok[i+1] = vec2(float(i - 2250) / 1000.f, -1.0f) + vec2(camera.eltolas().x,0);
+                pontok[i + 1] = vec2(float(i - 2250) / 1000.f, -1.0f) + vec2(camera.eltolas().x, 0);
             }
             glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
             glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pontok), pontok);
@@ -373,11 +380,10 @@ void Kerek::Draw() {
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(pontok), pontok);
     glBufferSubData(GL_ARRAY_BUFFER, sizeof(pontok), sizeof(kullopontok), kullopontok);
 
-    glLineWidth(0.8f); // Width of lines in pixels
+    glLineWidth(0.8f);
     glDrawArrays(GL_LINES, 122, 14);
-    glLineWidth(1.0f); // Width of lines in pixels
+    glLineWidth(1.0f);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 62);
-    //glDrawArrays(GL_TRIANGLE_STRIP, 60, 62);
 }
 
 void Kerek::allapot(float allapot) {
@@ -426,8 +432,8 @@ void Fej::Draw() {
     glBindVertexArray(vao);
 
     vec2 pontok2[40];
-    int i=0;
-    for(auto & pont : pontok)
+    int i = 0;
+    for (auto &pont : pontok)
         pontok2[i++] = pont + camera.eltolas();
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
@@ -534,8 +540,6 @@ void Ember::Draw() {
     kerek.mozgat(poseltolas);
     fej.mozgat(poseltolas);
 
-    vec2 fasz = spline.r(-1.0f);
-
     testPontok[3] = forgatas(labfejPontok[0], -1 * state * M_PI * 2, position);
     testPontok[6] = forgatas(labfejPontok[1], -1 * state * M_PI * 2, position);
     testPontok[4] = testPontok[1];
@@ -561,39 +565,40 @@ void Ember::Draw() {
     testPontok[5] = forgatas(testPontok[5], -1 * irany * szog2, testPontok[1]);
 
     vec2 testPontok2[7];
-    int i=0;
-    for (auto & pont: testPontok)
-        testPontok2[i++] = pont  + camera.eltolas();
+    int i = 0;
+    for (auto &pont: testPontok)
+        testPontok2[i++] = pont + camera.eltolas();
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo[0]);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(testPontok2), testPontok2);
 
-    glLineWidth(3.0f); // Width of lines in pixels
+    glLineWidth(3.0f);
     glDrawArrays(GL_LINE_STRIP, 0, 2);
     glDrawArrays(GL_LINE_STRIP, 1, 3);
     kerek.Draw();
     glBindVertexArray(vao);
-    glLineWidth(3.0f); // Width of lines in pixels
+    glLineWidth(3.0f);
     glDrawArrays(GL_LINE_STRIP, 4, 3);
     fej.Draw();
 }
 
 // http://cg.iit.bme.hu/portal/sites/default/files/oktatott%20t%C3%A1rgyak/sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes%20grafika/grafikus%20alap%20hw/sw/bme2dsys.pdf
 // textúrás rész
-class Hatter: public SplineBase {
-    vec4 image[500*500];
+class Hatter : public SplineBase {
+    vec4 image[500 * 500];
     GLuint vao, vbo[2], textureId;
     vec2 coord[4], uv[4];
     vec4 egAlja, egTeteje;
     vec4 hegyAlja, hegyTeteje;
 
     vec4 atmenet(vec4 kezdet, vec4 vege, float szazalek) {
-        vec4 szin = {0,0,0,1};
-        szin.x = kezdet.x + (vege.x-kezdet.x)*szazalek;
-        szin.y = kezdet.y + (vege.y-kezdet.y)*szazalek;
-        szin.z = kezdet.z + (vege.z-kezdet.z)*szazalek;
+        vec4 szin = {0, 0, 0, 1};
+        szin.x = kezdet.x + (vege.x - kezdet.x) * szazalek;
+        szin.y = kezdet.y + (vege.y - kezdet.y) * szazalek;
+        szin.z = kezdet.z + (vege.z - kezdet.z) * szazalek;
         return szin;
     }
+
 public:
     Hatter() {
         cps.emplace_back(vec2(-2.3f, -0.8f));
@@ -602,31 +607,32 @@ public:
         cps.emplace_back(vec2(0.7f, 0.7f));
         cps.emplace_back(vec2(2.3f, -0.8f));
 
-        coord[0] = {1,1};
-        coord[1] = {-1,1};
-        coord[2] = {1,-1};
-        coord[3] = {-1,-1};
+        coord[0] = {1, 1};
+        coord[1] = {-1, 1};
+        coord[2] = {1, -1};
+        coord[3] = {-1, -1};
 
-        uv[0] = {0,0};
-        uv[1] = {1,0};
-        uv[2] = {0,1};
-        uv[3] = {1,1};
+        uv[0] = {0, 0};
+        uv[1] = {1, 0};
+        uv[2] = {0, 1};
+        uv[3] = {1, 1};
 
-        egAlja = {143.0f/256, 188.0f/256, 216.0f/256, 1};
-        egTeteje = {2.0f/256,87.0f/256,140.0f/256, 1};
+        egAlja = {143.0f / 256, 188.0f / 256, 216.0f / 256, 1};
+        egTeteje = {2.0f / 256, 87.0f / 256, 140.0f / 256, 1};
 
-        hegyAlja = { 140.0f/256, 93.0f/256, 52.0f/256, 1};
-        hegyTeteje = {174.0f/256, 131.0f/256, 98.0f/256, 1};
+        hegyAlja = {140.0f / 256, 93.0f / 256, 52.0f / 256, 1};
+        hegyTeteje = {174.0f / 256, 131.0f / 256, 98.0f / 256, 1};
 
-        for(int y=0; y<500; ++y)
-            for(int x=0; x<500; ++x)
-            {
-                if(r((x-250)/250.0f).y-0.005f < -1*(y-250)/250.0f && r((x-250)/250.0f).y > -1*(y-250)/250.0f)
-                    image[500*y+x] = {0,0,0,1};
-                else if(r((x-250)/250.0f).y-0.005f > -1*(y-250)/250.0f)
-                    image[500*y+x] = atmenet(hegyAlja, hegyTeteje, -1*((-1*(y-250)/250.0f))/((r((x-250)/250.0f).y)-1.0f));
+        for (int y = 0; y < 500; ++y)
+            for (int x = 0; x < 500; ++x) {
+                if (r((x - 250) / 250.0f).y - 0.005f < -1 * (y - 250) / 250.0f &&
+                    r((x - 250) / 250.0f).y > -1 * (y - 250) / 250.0f)
+                    image[500 * y + x] = {0, 0, 0, 1};
+                else if (r((x - 250) / 250.0f).y - 0.005f > -1 * (y - 250) / 250.0f)
+                    image[500 * y + x] = atmenet(hegyAlja, hegyTeteje,
+                                                 -1 * ((-1 * (y - 250) / 250.0f)) / ((r((x - 250) / 250.0f).y) - 1.0f));
                 else
-                    image[500*y+x] = atmenet(egAlja, egTeteje, -1*(y-250)/250.0f);
+                    image[500 * y + x] = atmenet(egAlja, egTeteje, -1 * (y - 250) / 250.0f);
             }
 
     }
@@ -655,7 +661,7 @@ public:
         glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, NULL);
     }
 
-    void Draw(){
+    void Draw() {
         int location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
         glUniform1i(location, 1);
         location = glGetUniformLocation(gpuProgram.getId(), "textureUnit");
@@ -673,7 +679,6 @@ public:
 
 Hatter hatter;
 
-// Initialization, create an OpenGL context
 void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
 
@@ -684,49 +689,42 @@ void onInitialization() {
     spline.Create();
     hatter.Create();
 
-    // create program for the GPU
     gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
 }
 
-// Window has become invalid: Redraw
 void onDisplay() {
-    glClearColor(0.529, 0.808, 0.98, 1);     // background color
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear frame buffer
+    glClearColor(1, 1, 1, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    float MVPtransf[4][4] = {1, 0, 0, 0,    // MVP matrix,
-                             0, 1, 0, 0,    // row-major!
+    float MVPtransf[4][4] = {1, 0, 0, 0,
+                             0, 1, 0, 0,
                              0, 0, 1, 0,
                              0, 0, 0, 1};
 
-    int location = glGetUniformLocation(gpuProgram.getId(), "MVP");    // Get the GPU location of uniform variable MVP
+    int location = glGetUniformLocation(gpuProgram.getId(), "MVP");
     glUniformMatrix4fv(location, 1, GL_TRUE,
-                       &MVPtransf[0][0]);    // Load a 4x4 row-major float matrix to the specified location
+                       &MVPtransf[0][0]);
 
     hatter.Draw();
     spline.Draw();
     ember.Draw();
 
-    glutSwapBuffers(); // exchange buffers for double buffering
+    glutSwapBuffers();
 }
 
-// Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-    if (key == ' ') kovetes=true;
+    if (key == ' ') kovetes = true;
 }
 
-// Key of ASCII code released
 void onKeyboardUp(unsigned char key, int pX, int pY) {
 }
 
-// Move mouse with key pressed
 void onMouseMotion(int pX,
                    int pY) {}
 
-// Mouse click event
 void onMouse(int button, int state, int pX,
-             int pY) { // pX, pY are the pixel coordinates of the cursor in the coordinate system of the operation system
-    // Convert to normalized device space
-    float cX = 2.0f * pX / windowWidth - 1;    // flip y axis
+             int pY) {
+    float cX = 2.0f * pX / windowWidth - 1;
     float cY = 1.0f - 2.0f * pY / windowHeight;
 
     switch (button) {
@@ -737,7 +735,6 @@ void onMouse(int button, int state, int pX,
     }
 }
 
-// Idle event indicating that some time elapsed: do animation here
 void onIdle() {
     ember.Animate();
     camera.kozep();
