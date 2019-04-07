@@ -682,14 +682,14 @@ Hatter hatter;
 void onInitialization() {
     glViewport(0, 0, windowWidth, windowHeight);
 
-    int location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
-    glUniform1i(location, 0);
-
     ember.Create();
     spline.Create();
     hatter.Create();
 
     gpuProgram.Create(vertexSource, fragmentSource, "fragmentColor");
+
+    int location = glGetUniformLocation(gpuProgram.getId(), "isTexture");
+    glUniform1i(location, 0);
 }
 
 void onDisplay() {
